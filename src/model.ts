@@ -22,6 +22,7 @@ export const componentKinds = [
   "scheduler",
   "storage",
   "custom",
+  "note",
 ] as const;
 export type ComponentKind = (typeof componentKinds)[number];
 const id = z.string().min(1);
@@ -86,6 +87,7 @@ export const designSchema = z.object({
   id,
   title: text,
   subtitle: text.default(""),
+  hldExample: z.boolean().optional(),
   frameworkRevision: z.literal(1).optional(),
   scopeNotes: text.default(""),
   capacity: z

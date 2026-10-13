@@ -27,8 +27,10 @@ import {
   type NodeProps,
   type Connection,
 } from "@xyflow/react";
+import { hldWalkthrough } from "./hldExample";
 import dagre from "@dagrejs/dagre";
 import {
+  StickyNote,
   Monitor,
   Server,
   Network,
@@ -64,6 +66,7 @@ export const components: Record<
   ComponentKind,
   { label: string; icon: LucideIcon; color: string }
 > = {
+  note: { label: "Sticky note", icon: StickyNote, color: "orange" },
   client: { label: "Client", icon: Monitor, color: "blue" },
   service: { label: "Service", icon: Server, color: "purple" },
   gateway: { label: "API gateway", icon: Route, color: "blue" },
@@ -88,6 +91,43 @@ const ComponentNode = memo(function ComponentNode({
     n = data.component,
     def = components[n.kind],
     Icon = def.icon;
+  if (n.kind === "note")
+    return (
+      <div className={`sticky-note-node ${selected ? "selected" : ""}`}>
+        <div className="sticky-note-grip">
+          <StickyNote size={14} /> NOTE · drag to move
+        </div>
+        <input
+          className="nodrag nopan"
+          aria-label={`Note title ${n.id}`}
+          value={n.name}
+          placeholder="Note title"
+          onChange={(e) =>
+            edit((d) => {
+              d.architecture.nodes.find((x) => x.id === n.id)!.name =
+                e.target.value;
+            })
+          }
+        />
+        <textarea
+          className="nodrag nopan nowheel"
+          aria-label={`Note text ${n.id}`}
+          autoFocus={data.fresh}
+          placeholder="What does this component do?
+Responsibilities, decisions, or questions…"
+          rows={Math.min(16, Math.max(6, n.description.split("\n").length + 1))}
+          value={n.description}
+          onChange={(e) =>
+            edit((d) => {
+              d.architecture.nodes.find((x) => x.id === n.id)!.description =
+                e.target.value;
+            })
+          }
+        />
+        <Handle type="target" position={Position.Left} />
+        <Handle type="source" position={Position.Right} />
+      </div>
+    );
   return (
     <div className={`system-node ${selected ? "selected" : ""}`}>
       <Handle type="target" position={Position.Left} />
@@ -189,6 +229,7 @@ function ArchitectureCanvas({
     [label, setLabel] = useState(""),
     [async, setAsync] = useState(false);
   const [message, setMessage] = useState("");
+  const [walkthrough, setWalkthrough] = useState<number | null>(null);
   const mapNodes = useCallback(
     (): FlowNode[] =>
       design.architecture.nodes.map((n) => ({
@@ -305,14 +346,21 @@ function ArchitectureCanvas({
       name: components[kind].label,
       description: "",
       position: freePosition(
-        connectNext && selectedNode
-          ? { x: selectedNode.position.x + 300, y: selectedNode.position.y }
-          : { x: 80 + (design.architecture.nodes.length % 3) * 300, y: 65 },
+        kind === "note" && selectedNode
+          ? { x: selectedNode.position.x, y: selectedNode.position.y + 180 }
+          : connectNext && selectedNode
+            ? { x: selectedNode.position.x + 300, y: selectedNode.position.y }
+            : { x: 80 + (design.architecture.nodes.length % 3) * 300, y: 65 },
       ),
     };
     edit((d) => {
       d.architecture.nodes.push(node);
-      if (connectNext && selectedNode)
+      if (
+        kind !== "note" &&
+        connectNext &&
+        selectedNode &&
+        selectedNode.kind !== "note"
+      )
         d.architecture.edges.push({
           id: uid(),
           source: selectedNode.id,
@@ -359,15 +407,18 @@ function ArchitectureCanvas({
       marginy: 50,
     });
     graph.setDefaultEdgeLabel(() => ({}));
-    design.architecture.nodes.forEach((n) =>
-      graph.setNode(n.id, { width: 210, height: n.description ? 110 : 80 }),
-    );
-    design.architecture.edges.forEach((e) =>
-      graph.setEdge(e.source, e.target, {}, e.id),
-    );
+    design.architecture.nodes
+      .filter((n) => n.kind !== "note")
+      .forEach((n) =>
+        graph.setNode(n.id, { width: 210, height: n.description ? 110 : 80 }),
+      );
+    design.architecture.edges
+      .filter((e) => graph.hasNode(e.source) && graph.hasNode(e.target))
+      .forEach((e) => graph.setEdge(e.source, e.target, {}, e.id));
     dagre.layout(graph);
     edit((d) => {
       d.architecture.nodes.forEach((n) => {
+        if (n.kind === "note") return;
         const pos = graph.node(n.id);
         n.position = { x: pos.x - 105, y: pos.y - (n.description ? 55 : 40) };
       });
@@ -432,6 +483,64 @@ function ArchitectureCanvas({
     <div
       className={`architecture-editor ${expanded ? "architecture-expanded" : ""}`}
     >
+      {design.hldExample && (
+        <div className="hld-walkthrough">
+          <strong>Read the diagram one flow at a time</strong>
+          <p>
+            Boxes = responsibilities. Arrows = calls or data movement. Labels =
+            operation + payload. Solid = direct call; dashed = decoupled
+            delivery. Click a flow to isolate it, or expand the canvas.
+          </p>
+          <div className="hld-flow-tabs">
+            <button
+              aria-pressed={walkthrough === null}
+              onClick={() => {
+                setWalkthrough(null);
+                void fitView({ padding: 0.15, duration: 300 });
+              }}
+            >
+              All components
+            </button>
+            {hldWalkthrough.map((flow, index) => (
+              <button
+                key={flow.title}
+                aria-pressed={walkthrough === index}
+                onClick={() => {
+                  setWalkthrough(index);
+                  void fitView({
+                    nodes: design.architecture.nodes.filter((n) =>
+                      flow.names.includes(n.name),
+                    ),
+                    padding: 0.2,
+                    duration: 300,
+                  });
+                }}
+              >
+                {flow.title}
+              </button>
+            ))}
+          </div>
+          {walkthrough !== null ? (
+            <div className="hld-flow-explanation">
+              <p>{hldWalkthrough[walkthrough].text}</p>
+              <div>
+                <span>
+                  <b>Input</b> {hldWalkthrough[walkthrough].input}
+                </span>
+                <span>
+                  <b>Output</b> {hldWalkthrough[walkthrough].output}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <p>
+              Start with the request path, then add events and background work.
+              This reference includes more components than most interviews need.
+              Full walkthrough notes are also saved in Discussion.
+            </p>
+          )}
+        </div>
+      )}
       <div className="architecture-toolbar">
         <span>
           <MousePointer2 size={14} />
@@ -514,7 +623,16 @@ function ArchitectureCanvas({
               }}
             >
               <ReactFlow<FlowNode, SystemEdge>
-                nodes={nodes}
+                nodes={nodes.map((n) => ({
+                  ...n,
+                  hidden:
+                    design.hldExample &&
+                    walkthrough !== null &&
+                    n.data.component.kind !== "note" &&
+                    !hldWalkthrough[walkthrough].names.includes(
+                      n.data.component.name,
+                    ),
+                }))}
                 edges={edges}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
@@ -603,9 +721,15 @@ function ArchitectureCanvas({
         <div className="selection-inspector">
           {selectedNode && (
             <>
-              <span className="tiny-label">COMPONENT</span>
+              <span className="tiny-label">
+                {selectedNode.kind === "note" ? "NOTE" : "COMPONENT"}
+              </span>
               <input
-                aria-label="Selected component name"
+                aria-label={
+                  selectedNode.kind === "note"
+                    ? "Selected note title"
+                    : "Selected component name"
+                }
                 value={selectedNode.name}
                 onChange={(e) =>
                   edit((d) => {
@@ -615,20 +739,26 @@ function ArchitectureCanvas({
                   })
                 }
               />
-              <input
-                aria-label="Component description"
-                placeholder="Optional description"
-                value={selectedNode.description}
-                onChange={(e) =>
-                  edit((d) => {
-                    d.architecture.nodes.find(
-                      (n) => n.id === selectedNode.id,
-                    )!.description = e.target.value;
-                  })
-                }
-              />
+              {selectedNode.kind !== "note" && (
+                <input
+                  aria-label="Component description"
+                  placeholder="Optional description"
+                  value={selectedNode.description}
+                  onChange={(e) =>
+                    edit((d) => {
+                      d.architecture.nodes.find(
+                        (n) => n.id === selectedNode.id,
+                      )!.description = e.target.value;
+                    })
+                  }
+                />
+              )}
               <DeleteButton
-                label="Delete component"
+                label={
+                  selectedNode.kind === "note"
+                    ? "Delete note"
+                    : "Delete component"
+                }
                 onClick={() =>
                   edit((d) => removeNode(d, selectedNode.id), true)
                 }

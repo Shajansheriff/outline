@@ -67,3 +67,13 @@ This is a compact, DBML-style subset, not a SQL DDL parser. Full SQL and incompl
 ## Implementation
 
 React and TypeScript with Vite; CodeMirror for JSON examples; React Flow and Dagre for architecture; Zod for file validation; IndexedDB through `idb` for persistence. All editing happens on the client. Expensive editors are loaded when their sections are opened.
+
+## Guided HLD example
+
+In High Level Design, choose **Open sample HLD**. This creates a separate editable ride-booking design with 22 components and 25 labeled connections. Your current design stays in the sidebar.
+
+Use the six walkthrough buttons to isolate request handling, Kafka pub/sub, background jobs, payment webhooks, notifications, and driver location updates. **All components** restores the full view. Expand the canvas and zoom/pan to inspect labels. Each walkthrough explains inputs, outputs, and interactions; these notes are also saved in Discussion and included in exports.
+
+The example includes SQL, NoSQL, Redis, Kafka, a job queue, scheduler, workers, object storage, payment callbacks, and notification delivery. Boxes represent responsibilities. Solid arrows represent direct calls; dashed arrows represent decoupled delivery. HTTP webhooks are decoupled from the original operation but still use request/response for delivery. This is a reference palette, not a requirement to include every component in an interview.
+
+In the HLD component palette, **Sticky note** adds an editable title and multiline annotation. Drag its header to position it beside a component. Notes support optional labeled connections, autosave, JSON/Markdown export, and deletion undo. Auto-layout preserves note positions.

@@ -39,6 +39,7 @@ import {
   type SectionKind,
 } from "./model";
 import { DeleteButton, IconButton } from "./ui";
+import { createHldExample } from "./hldExample";
 import { useWorkspace } from "./useWorkspace";
 
 const Architecture = lazy(() =>
@@ -231,7 +232,28 @@ export function App() {
         <Models design={design} edit={edit} />
       </>
     ),
-    architecture: <Architecture design={design} edit={edit} />,
+    architecture: (
+      <>
+        <div className="hld-example-intro">
+          <span>Learn how calls, events, queues, and callbacks connect.</span>
+          <button
+            className="button button-small"
+            onClick={() => {
+              workspace.add(createHldExample());
+              requestAnimationFrame(() =>
+                document
+                  .getElementById("architecture")
+                  ?.scrollIntoView({ block: "start" }),
+              );
+            }}
+          >
+            Open sample HLD
+          </button>
+          <small>Opens a separate editable design</small>
+        </div>
+        <Architecture design={design} edit={edit} />
+      </>
+    ),
   };
   return (
     <div className="app-shell">
