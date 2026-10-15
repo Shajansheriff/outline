@@ -81,6 +81,10 @@ const edgeSchema = z.object({
   target: id,
   label: text,
   async: z.boolean(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
 });
 export const designSchema = z.object({
   version: z.literal(1),

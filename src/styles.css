@@ -2939,3 +2939,35 @@ a {
 .sticky-note-node textarea::placeholder {
   color: #a89968;
 }
+
+.palette-item[draggable="true"] {
+  cursor: grab;
+}
+.palette-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+.connection-colors {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.connection-colors button {
+  width: 22px;
+  height: 22px;
+  border: 2px solid white;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px #dce3ed;
+}
+.connection-colors button[aria-pressed="true"] {
+  outline: 2px solid #26334a;
+  outline-offset: 2px;
+}
+.connection-colors .color-auto {
+  width: auto;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f4f6f9;
+  color: #64748b;
+  font-size: 10px;
+}

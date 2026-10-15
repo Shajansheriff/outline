@@ -158,6 +158,14 @@ Responsibilities, decisions, or questions…"
     </div>
   );
 });
+const connectionColors = [
+  ["Slate", "#64748b"],
+  ["Blue", "#2563eb"],
+  ["Green", "#16a34a"],
+  ["Orange", "#ea580c"],
+  ["Red", "#dc2626"],
+  ["Purple", "#9333ea"],
+] as const;
 const nodeTypes = { component: ComponentNode };
 type SystemEdge = Edge<{ offset: number; parallel: boolean }>;
 function ConnectionEdge(props: EdgeProps<SystemEdge>) {
@@ -179,7 +187,7 @@ function ConnectionEdge(props: EdgeProps<SystemEdge>) {
         markerEnd={props.markerEnd}
         style={{
           ...props.style,
-          ...(props.selected ? { stroke: "#7e9fcb", strokeWidth: 2 } : {}),
+          ...(props.selected ? { strokeWidth: 2.8 } : {}),
         }}
       />
       {props.label && (
@@ -216,7 +224,8 @@ function ArchitectureCanvas({
   design: Design;
   edit: EditDesign;
 }) {
-  const { fitView, setViewport } = useReactFlow<FlowNode>();
+  const { fitView, setViewport, screenToFlowPosition } =
+    useReactFlow<FlowNode>();
   const [expanded, setExpanded] = useState(false),
     [selection, setSelection] = useState<{
       type: "node" | "edge";
@@ -301,13 +310,13 @@ function ArchitectureCanvas({
               48,
           },
           style: {
-            stroke: e.async ? "#76968d" : "#8d94a6",
+            stroke: e.color ?? (e.async ? "#76968d" : "#8d94a6"),
             strokeWidth: 1.6,
             strokeDasharray: e.async ? "6 4" : undefined,
           },
           markerEnd: {
             type: MarkerType.ArrowClosed,
-            color: e.async ? "#76968d" : "#8d94a6",
+            color: e.color ?? (e.async ? "#76968d" : "#8d94a6"),
           },
           labelStyle: { fill: "#535d72", fontSize: 11, fontWeight: 500 },
           labelBgStyle: { fill: "#fff" },
@@ -339,19 +348,22 @@ function ArchitectureCanvas({
       next.y += 130;
     return next;
   }
-  function add(kind: ComponentKind) {
+  function add(kind: ComponentKind, position?: { x: number; y: number }) {
+    setWalkthrough(null);
     const node: DiagramNode = {
       id: uid(),
       kind,
       name: components[kind].label,
       description: "",
-      position: freePosition(
-        kind === "note" && selectedNode
-          ? { x: selectedNode.position.x, y: selectedNode.position.y + 180 }
-          : connectNext && selectedNode
-            ? { x: selectedNode.position.x + 300, y: selectedNode.position.y }
-            : { x: 80 + (design.architecture.nodes.length % 3) * 300, y: 65 },
-      ),
+      position:
+        position ??
+        freePosition(
+          kind === "note" && selectedNode
+            ? { x: selectedNode.position.x, y: selectedNode.position.y + 180 }
+            : connectNext && selectedNode
+              ? { x: selectedNode.position.x + 300, y: selectedNode.position.y }
+              : { x: 80 + (design.architecture.nodes.length % 3) * 300, y: 65 },
+        ),
     };
     edit((d) => {
       d.architecture.nodes.push(node);
@@ -371,9 +383,10 @@ function ArchitectureCanvas({
     });
     setFresh(node.id);
     setSelection({ type: "node", id: node.id });
-    requestAnimationFrame(() => {
-      void fitView({ padding: 0.25, duration: 250 });
-    });
+    if (!position)
+      requestAnimationFrame(() => {
+        void fitView({ padding: 0.25, duration: 250 });
+      });
   }
   function connect(
     connection: Connection | { source: string; target: string },
@@ -544,7 +557,7 @@ function ArchitectureCanvas({
       <div className="architecture-toolbar">
         <span>
           <MousePointer2 size={14} />
-          Click to add. Drag to connect.
+          Click or drag components onto the canvas.
         </span>
         <div>
           <button
@@ -587,6 +600,14 @@ function ArchitectureCanvas({
                 <button
                   key={kind}
                   className="palette-item"
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.setData(
+                      "application/outline-component",
+                      kind,
+                    );
+                    event.dataTransfer.effectAllowed = "copy";
+                  }}
                   onClick={() => add(kind)}
                   title={`${connectNext && selectedNode ? "Add connected" : "Add"} ${c.label}`}
                 >
@@ -614,7 +635,35 @@ function ArchitectureCanvas({
             </button>
           </div>
         </aside>
-        <div className="flow-canvas" aria-label="Architecture canvas">
+        <div
+          className="flow-canvas"
+          aria-label="Architecture canvas"
+          onDragOver={(event) => {
+            if (
+              !event.dataTransfer.types.includes(
+                "application/outline-component",
+              )
+            )
+              return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          onDrop={(event) => {
+            const kind = event.dataTransfer.getData(
+              "application/outline-component",
+            );
+            if (!componentKinds.includes(kind as ComponentKind)) return;
+            event.preventDefault();
+            const position = screenToFlowPosition({
+              x: event.clientX,
+              y: event.clientY,
+            });
+            add(kind as ComponentKind, {
+              x: position.x - (kind === "note" ? 135 : 105),
+              y: position.y - 35,
+            });
+          }}
+        >
           <EditContext.Provider value={edit}>
             <SelectEdgeContext.Provider
               value={(id) => {
@@ -795,6 +844,42 @@ function ArchitectureCanvas({
                 />
                 Asynchronous
               </label>
+              <div
+                className="connection-colors"
+                role="group"
+                aria-label="Connection color"
+              >
+                <button
+                  className="color-auto"
+                  aria-pressed={!selectedEdge.color}
+                  title="Default connection color"
+                  onClick={() =>
+                    edit((d) => {
+                      delete d.architecture.edges.find(
+                        (e) => e.id === selectedEdge.id,
+                      )!.color;
+                    })
+                  }
+                >
+                  Auto
+                </button>
+                {connectionColors.map(([name, color]) => (
+                  <button
+                    key={color}
+                    aria-label={`${name} connection color`}
+                    title={name}
+                    aria-pressed={selectedEdge.color === color}
+                    style={{ backgroundColor: color }}
+                    onClick={() =>
+                      edit((d) => {
+                        d.architecture.edges.find(
+                          (e) => e.id === selectedEdge.id,
+                        )!.color = color;
+                      })
+                    }
+                  />
+                ))}
+              </div>
               <DeleteButton
                 label="Delete connection"
                 onClick={() =>
